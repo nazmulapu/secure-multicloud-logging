@@ -1,0 +1,16 @@
+# Terraform Cloud Workspace: azure-log-generator
+
+# Required Variables
+azure_region       = "germanywestcentral"
+ssh_public_key     = "ssh-rsa AAAAB3NzaC1yc2EAAAA..."  # Sensitive
+aws_collector_ip   = "3.123.45.67"                     # From AWS output
+allowed_ssh_cidr   = ["0.0.0.0/0"]                     # Your IP CIDR
+
+# Optional (uses defaults if omitted)
+# project_name = "secure-logging"
+# environment  = "production"
+# vm_size      = "Standard_B2s"
+
+# Environment Variables (mark as Sensitive)
+# ARM_CLIENT_ID, ARM_CLIENT_SECRET, ARM_TENANT_ID, ARM_SUBSCRIPTION_ID
+
