@@ -1,4 +1,14 @@
 ---
+- name: Fetch CA certificate from AWS collector
+  hosts: collector
+  become: yes
+  tasks:
+    - name: Fetch CA certificate
+      fetch:
+        src: /etc/rsyslog.d/tls/ca-cert.pem
+        dest: /tmp/ca-cert.pem
+        flat: yes
+
 - name: Deploy Rsyslog Client and Log Generator on Azure
   hosts: generator
   become: yes
@@ -11,6 +21,14 @@
         owner: root
         group: root
         mode: '0755'
+    
+    - name: Copy CA certificate from AWS
+      copy:
+        src: /tmp/ca-cert.pem
+        dest: /etc/rsyslog.d/tls/ca-cert.pem
+        owner: root
+        group: root
+        mode: '0644'
 
   roles:
     - common          # Base system setup (packages, Python modules)

@@ -23,7 +23,7 @@
     group: root
     mode: '0644'
   notify: restart rsyslog
-  when: local_ca_cert_path is defined
+  when: local_ca_cert_path is defined and local_ca_cert_path != ""
 
 - name: Configure rsyslog TLS client
   template:

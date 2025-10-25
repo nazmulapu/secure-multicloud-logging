@@ -77,3 +77,4 @@ env/
 .env.local
 temp/
 tmp/
+README copy.md

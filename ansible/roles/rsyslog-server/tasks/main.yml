@@ -126,3 +126,40 @@
 - name: Display rsyslog server status
   debug:
     msg: "Rsyslog TLS server is listening on port {{ rsyslog_server_port }}"
+
+- name: Ensure remote log directories and files have correct permissions
+  block:
+    - name: Find remote log directories
+      find:
+        paths: "{{ rsyslog_remote_log_dir }}"
+        recurse: yes
+        file_type: directory
+      register: remote_log_dirs
+
+    - name: Set directory permissions to 0755 and owner syslog:adm
+      file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: syslog
+        group: adm
+        mode: '0755'
+      loop: "{{ remote_log_dirs.files }}"
+      when: remote_log_dirs.matched > 0
+
+    - name: Find remote log files
+      find:
+        paths: "{{ rsyslog_remote_log_dir }}"
+        recurse: yes
+        file_type: file
+      register: remote_log_files
+
+    - name: Set file permissions to 0644 and owner syslog:syslog
+      file:
+        path: "{{ item.path }}"
+        state: file
+        owner: syslog
+        group: syslog
+        mode: '0644'
+      loop: "{{ remote_log_files.files }}"
+      when: remote_log_files.matched > 0
+  when: rsyslog_remote_log_dir is defined
