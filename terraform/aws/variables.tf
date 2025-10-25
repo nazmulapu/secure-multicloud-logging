@@ -31,7 +31,7 @@ variable "public_subnet_cidr" {
 variable "instance_type" {
   description = "EC2 instance type for the log collector"
   type        = string
-  default     = "t3.medium"
+  default     = "m7i-flex.large"  # Free Tier eligible in select regions (2 vCPU, 8GB RAM). Excellent for ELK stack
 }
 
 variable "root_volume_size" {
