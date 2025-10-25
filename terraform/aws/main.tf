@@ -2,169 +2,209 @@ terraform {
   required_version = ">= 1.5.0"
   
   cloud {
-    organization = "secure-multicloud-logging"  # Change to your org name
+    organization = "nazmulapu-labs"
     
     workspaces {
-      name = "azure-log-generator"
+      name = "secure-multicloud-logging"
     }
   }
   
   required_providers {
-    azurerm = {
-      source  = "hashicorp/azurerm"
-      version = "~> 3.0"
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.0"
     }
   }
 }
 
-provider "azurerm" {
-  features {}
+provider "aws" {
+  region = var.aws_region
 }
 
-# Resource Group
-resource "azurerm_resource_group" "main" {
-  name     = "${var.project_name}-rg"
-  location = var.azure_region
+# Create SSH Key Pair in AWS
+resource "aws_key_pair" "collector" {
+  key_name   = "${var.project_name}-collector-key"
+  public_key = var.ssh_public_key
 
   tags = {
+    Name        = "${var.project_name}-collector-key"
     Environment = var.environment
     Project     = var.project_name
   }
 }
 
-# Virtual Network
-resource "azurerm_virtual_network" "main" {
-  name                = "${var.project_name}-vnet"
-  address_space       = [var.vnet_cidr]
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+# VPC
+resource "aws_vpc" "main" {
+  cidr_block           = var.vpc_cidr
+  enable_dns_hostnames = true
+  enable_dns_support   = true
 
   tags = {
+    Name        = "${var.project_name}-vpc"
+    Environment = var.environment
+    Project     = var.project_name
+  }
+}
+
+# Internet Gateway
+resource "aws_internet_gateway" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name        = "${var.project_name}-igw"
     Environment = var.environment
   }
 }
 
-# Subnet
-resource "azurerm_subnet" "main" {
-  name                 = "${var.project_name}-subnet"
-  resource_group_name  = azurerm_resource_group.main.name
-  virtual_network_name = azurerm_virtual_network.main.name
-  address_prefixes     = [var.subnet_cidr]
-}
-
-# Public IP
-resource "azurerm_public_ip" "generator" {
-  name                = "${var.project_name}-generator-pip"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
-  allocation_method   = "Static"
-  sku                 = "Standard"
+# Public Subnet
+resource "aws_subnet" "public" {
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = var.public_subnet_cidr
+  availability_zone       = data.aws_availability_zones.available.names[0]
+  map_public_ip_on_launch = true
 
   tags = {
+    Name        = "${var.project_name}-public-subnet"
     Environment = var.environment
   }
 }
 
-# Network Security Group
-resource "azurerm_network_security_group" "generator" {
-  name                = "${var.project_name}-generator-nsg"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+# Route Table
+resource "aws_route_table" "public" {
+  vpc_id = aws_vpc.main.id
 
-  # SSH inbound
-  security_rule {
-    name                       = "SSH"
-    priority                   = 1001
-    direction                  = "Inbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "22"
-    source_address_prefix      = "*"
-    destination_address_prefix = "*"
-  }
-
-  # Rsyslog TLS outbound to AWS
-  security_rule {
-    name                       = "Rsyslog-TLS-Outbound"
-    priority                   = 1002
-    direction                  = "Outbound"
-    access                     = "Allow"
-    protocol                   = "Tcp"
-    source_port_range          = "*"
-    destination_port_range     = "6514"
-    source_address_prefix      = "*"
-    destination_address_prefix = var.aws_collector_ip
+  route {
+    cidr_block = "0.0.0.0/0"
+    gateway_id = aws_internet_gateway.main.id
   }
 
   tags = {
+    Name        = "${var.project_name}-public-rt"
     Environment = var.environment
   }
 }
 
-# Network Interface
-resource "azurerm_network_interface" "generator" {
-  name                = "${var.project_name}-generator-nic"
-  location            = azurerm_resource_group.main.location
-  resource_group_name = azurerm_resource_group.main.name
+# Route Table Association
+resource "aws_route_table_association" "public" {
+  subnet_id      = aws_subnet.public.id
+  route_table_id = aws_route_table.public.id
+}
 
-  ip_configuration {
-    name                          = "internal"
-    subnet_id                     = azurerm_subnet.main.id
-    private_ip_address_allocation = "Dynamic"
-    public_ip_address_id          = azurerm_public_ip.generator.id
+# Security Group for Log Collector
+resource "aws_security_group" "collector" {
+  name        = "${var.project_name}-collector-sg"
+  description = "Security group for ELK stack and rsyslog collector"
+  vpc_id      = aws_vpc.main.id
+
+  # SSH
+  ingress {
+    description = "SSH from anywhere"
+    from_port   = 22
+    to_port     = 22
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_ssh_cidr
+  }
+
+  # Rsyslog TLS
+  ingress {
+    description = "Rsyslog TLS"
+    from_port   = 6514
+    to_port     = 6514
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Kibana
+  ingress {
+    description = "Kibana Web UI"
+    from_port   = 5601
+    to_port     = 5601
+    protocol    = "tcp"
+    cidr_blocks = var.allowed_kibana_cidr
+  }
+
+  # Elasticsearch (only from localhost, but include for reference)
+  ingress {
+    description = "Elasticsearch"
+    from_port   = 9200
+    to_port     = 9200
+    protocol    = "tcp"
+    cidr_blocks = [var.vpc_cidr]
+  }
+
+  # Outbound
+  egress {
+    description = "Allow all outbound"
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
   tags = {
+    Name        = "${var.project_name}-collector-sg"
     Environment = var.environment
   }
 }
 
-# Associate NSG with NIC
-resource "azurerm_network_interface_security_group_association" "generator" {
-  network_interface_id      = azurerm_network_interface.generator.id
-  network_security_group_id = azurerm_network_security_group.generator.id
-}
+# EC2 Instance for Log Collector
+resource "aws_instance" "collector" {
+  ami           = data.aws_ami.ubuntu.id
+  instance_type = var.instance_type
+  subnet_id     = aws_subnet.public.id
+  key_name      = aws_key_pair.collector.key_name  # ← Updated to use Terraform-managed key
 
-# Virtual Machine
-resource "azurerm_linux_virtual_machine" "generator" {
-  name                = "${var.project_name}-generator"
-  resource_group_name = azurerm_resource_group.main.name
-  location            = azurerm_resource_group.main.location
-  size                = var.vm_size
-  admin_username      = var.admin_username
+  vpc_security_group_ids = [aws_security_group.collector.id]
 
-  network_interface_ids = [
-    azurerm_network_interface.generator.id,
-  ]
-
-  admin_ssh_key {
-    username   = var.admin_username
-    public_key = file(var.ssh_public_key_path)
+  root_block_device {
+    volume_size           = var.root_volume_size
+    volume_type           = "gp3"
+    delete_on_termination = true
+    encrypted             = true
   }
 
-  os_disk {
-    caching              = "ReadWrite"
-    storage_account_type = "Premium_LRS"
-    disk_size_gb         = var.os_disk_size_gb
-  }
-
-  source_image_reference {
-    publisher = "Canonical"
-    offer     = "0001-com-ubuntu-server-jammy"
-    sku       = "22_04-lts-gen2"
-    version   = "latest"
-  }
-
-  custom_data = base64encode(<<-EOF
+  user_data = <<-EOF
               #!/bin/bash
               apt-get update
               apt-get install -y python3 python3-pip
               EOF
-  )
 
   tags = {
+    Name        = "${var.project_name}-collector"
     Environment = var.environment
-    Role        = "log-generator"
+    Role        = "log-collector"
+  }
+}
+
+# Elastic IP
+resource "aws_eip" "collector" {
+  domain   = "vpc"
+  instance = aws_instance.collector.id
+
+  tags = {
+    Name        = "${var.project_name}-collector-eip"
+    Environment = var.environment
+  }
+
+  depends_on = [aws_internet_gateway.main]
+}
+
+# Data Sources
+data "aws_availability_zones" "available" {
+  state = "available"
+}
+
+data "aws_ami" "ubuntu" {
+  most_recent = true
+  owners      = ["099720109477"] # Canonical
+
+  filter {
+    name   = "name"
+    values = ["ubuntu/images/hvm-ssd/ubuntu-jammy-22.04-amd64-server-*"]
+  }
+
+  filter {
+    name   = "virtualization-type"
+    values = ["hvm"]
   }
 }
