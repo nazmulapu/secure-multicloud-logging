@@ -1,7 +1,7 @@
 variable "azure_region" {
   description = "Azure region for resources"
   type        = string
-  default     = "germanywestcentral"  # ← Frankfurt, Germany (matches AWS eu-central-1)
+  default     = "westeurope"  # Amsterdam, Netherlands
 }
 
 variable "project_name" {
