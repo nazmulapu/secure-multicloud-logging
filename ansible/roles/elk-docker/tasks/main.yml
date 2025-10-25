@@ -1,0 +1,115 @@
+---
+# Note: Base packages (curl, gnupg, etc.) installed by common role
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+    filename: docker
+
+- name: Install Docker CE
+  apt:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-buildx-plugin
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+
+- name: Start and enable Docker service
+  systemd:
+    name: docker
+    enabled: yes
+    state: started
+
+- name: Add ubuntu user to docker group
+  user:
+    name: ubuntu
+    groups: docker
+    append: yes
+
+- name: Reset SSH connection to apply group changes
+  meta: reset_connection
+
+- name: Create ELK directory structure
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: ubuntu
+    group: ubuntu
+    mode: '0755'
+  loop:
+    - "{{ elk_home }}"
+    - "{{ elk_home }}/elasticsearch/data"
+    - "{{ elk_home }}/kibana/data"
+    - "{{ elk_home }}/logstash/pipeline"
+    - "{{ elk_home }}/logstash/data"
+
+- name: Set vm.max_map_count for Elasticsearch
+  sysctl:
+    name: vm.max_map_count
+    value: '262144'
+    state: present
+    reload: yes
+
+- name: Create Logstash pipeline configuration
+  template:
+    src: logstash-syslog.conf.j2
+    dest: "{{ elk_home }}/logstash/pipeline/logstash.conf"
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Create Docker Compose file for ELK stack
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ elk_home }}/docker-compose.yml"
+    owner: ubuntu
+    group: ubuntu
+    mode: '0644'
+
+- name: Start ELK stack with Docker Compose
+  community.docker.docker_compose_v2:
+    project_src: "{{ elk_home }}"
+    state: present
+    pull: always
+  become_user: ubuntu
+
+- name: Wait for Elasticsearch to be ready
+  uri:
+    url: "http://localhost:{{ elasticsearch_http_port }}/_cluster/health"
+    method: GET
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
+
+- name: Wait for Kibana to be ready
+  uri:
+    url: "http://localhost:{{ kibana_port }}/api/status"
+    method: GET
+    status_code: 200
+  register: result
+  until: result.status == 200
+  retries: 30
+  delay: 10
+
+- name: Display Elasticsearch status
+  debug:
+    msg: "Elasticsearch is running in Docker on http://{{ ansible_default_ipv4.address }}:{{ elasticsearch_http_port }}"
+
+- name: Display Kibana status
+  debug:
+    msg: "Kibana is accessible at http://{{ ansible_default_ipv4.address }}:{{ kibana_port }}"
+
+- name: Display Docker container status
+  debug:
+    msg: "Check container status with: docker-compose -f {{ elk_home }}/docker-compose.yml ps"

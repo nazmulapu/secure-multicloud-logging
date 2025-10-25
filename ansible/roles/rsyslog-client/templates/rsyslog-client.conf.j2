@@ -1,0 +1,24 @@
+# Rsyslog TLS Client Configuration
+
+# Load modules
+module(load="omfwd")
+
+# Global TLS settings
+global(
+    DefaultNetstreamDriver="gtls"
+    DefaultNetstreamDriverCAFile="{{ rsyslog_ca_cert }}"
+)
+
+# Forward all logs to remote server via TLS
+action(type="omfwd"
+       protocol="tcp"
+       target="{{ rsyslog_server_ip }}"
+       port="{{ rsyslog_server_port }}"
+       StreamDriver="gtls"
+       StreamDriverMode="1"
+       StreamDriverAuthMode="anon"
+       queue.type="LinkedList"
+       queue.filename="fwdRule1"
+       queue.maxDiskSpace="1g"
+       queue.saveOnShutdown="on"
+       action.resumeRetryCount="-1")

@@ -1,0 +1,128 @@
+---
+- name: Install rsyslog and rsyslog-gnutls
+  apt:
+    name:
+      - rsyslog
+      - rsyslog-gnutls
+    state: present
+    update_cache: yes
+
+- name: Create TLS certificate directory
+  file:
+    path: "{{ rsyslog_tls_cert_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Check if CA certificate exists
+  stat:
+    path: "{{ rsyslog_ca_cert }}"
+  register: ca_cert_stat
+
+- name: Generate CA private key
+  openssl_privatekey:
+    path: "{{ rsyslog_tls_cert_dir }}/ca-key.pem"
+    size: 4096
+  when: not ca_cert_stat.stat.exists
+
+- name: Generate CA certificate signing request
+  openssl_csr:
+    path: "{{ rsyslog_tls_cert_dir }}/ca.csr"
+    privatekey_path: "{{ rsyslog_tls_cert_dir }}/ca-key.pem"
+    common_name: "Secure Logging CA"
+    organization_name: "Secure Logging"
+    country_name: "US"
+  when: not ca_cert_stat.stat.exists
+
+- name: Generate self-signed CA certificate
+  openssl_certificate:
+    path: "{{ rsyslog_ca_cert }}"
+    privatekey_path: "{{ rsyslog_tls_cert_dir }}/ca-key.pem"
+    csr_path: "{{ rsyslog_tls_cert_dir }}/ca.csr"
+    provider: selfsigned
+    selfsigned_not_after: "+3650d"
+  when: not ca_cert_stat.stat.exists
+
+- name: Generate server private key
+  openssl_privatekey:
+    path: "{{ rsyslog_tls_cert_dir }}/server-key.pem"
+    size: 4096
+  when: not ca_cert_stat.stat.exists
+
+- name: Generate server certificate signing request
+  openssl_csr:
+    path: "{{ rsyslog_tls_cert_dir }}/server.csr"
+    privatekey_path: "{{ rsyslog_tls_cert_dir }}/server-key.pem"
+    common_name: "{{ ansible_default_ipv4.address }}"
+    subject_alt_name: "IP:{{ ansible_default_ipv4.address }},DNS:{{ ansible_hostname }}"
+    organization_name: "Secure Logging"
+    country_name: "US"
+  when: not ca_cert_stat.stat.exists
+
+- name: Generate server certificate signed by CA
+  openssl_certificate:
+    path: "{{ rsyslog_server_cert }}"
+    csr_path: "{{ rsyslog_tls_cert_dir }}/server.csr"
+    ownca_path: "{{ rsyslog_ca_cert }}"
+    ownca_privatekey_path: "{{ rsyslog_tls_cert_dir }}/ca-key.pem"
+    provider: ownca
+    ownca_not_after: "+365d"
+  when: not ca_cert_stat.stat.exists
+
+- name: Set certificate permissions
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - "{{ rsyslog_ca_cert }}"
+    - "{{ rsyslog_server_cert }}"
+  when: not ca_cert_stat.stat.exists
+
+- name: Set private key permissions
+  file:
+    path: "{{ item }}"
+    owner: root
+    group: syslog
+    mode: '0640'
+  loop:
+    - "{{ rsyslog_tls_cert_dir }}/ca-key.pem"
+    - "{{ rsyslog_tls_cert_dir }}/server-key.pem"
+  when: not ca_cert_stat.stat.exists
+
+- name: Create remote log directory
+  file:
+    path: "{{ rsyslog_remote_log_dir }}"
+    state: directory
+    owner: syslog
+    group: adm
+    mode: '0755'
+
+- name: Configure rsyslog TLS server
+  template:
+    src: rsyslog-server.conf.j2
+    dest: /etc/rsyslog.d/10-tls-server.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart rsyslog
+
+- name: Configure log rotation for remote logs
+  template:
+    src: logrotate-remote.j2
+    dest: /etc/logrotate.d/rsyslog-remote
+    owner: root
+    group: root
+    mode: '0644'
+
+- name: Enable and start rsyslog
+  systemd:
+    name: rsyslog
+    enabled: yes
+    state: started
+
+- name: Display rsyslog server status
+  debug:
+    msg: "Rsyslog TLS server is listening on port {{ rsyslog_server_port }}"

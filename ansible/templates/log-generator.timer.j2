@@ -1,0 +1,11 @@
+[Unit]
+Description=Log Generator Timer
+Requires=log-generator.service
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ log_generation_interval }}s
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target

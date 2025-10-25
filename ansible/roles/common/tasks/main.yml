@@ -1,0 +1,31 @@
+---
+# Common role - Base system setup for all hosts
+
+- name: Update apt cache
+  apt:
+    update_cache: yes
+    cache_valid_time: 3600
+  become: yes
+
+- name: Install base packages
+  apt:
+    name:
+      - python3-pip
+      - software-properties-common
+      - curl
+      - wget
+      - apt-transport-https
+      - ca-certificates
+      - gnupg
+      - lsb-release
+    state: present
+  become: yes
+
+- name: Install Python packages
+  pip:
+    name:
+      - docker
+      - docker-compose
+      - cryptography
+    state: present
+  become: yes

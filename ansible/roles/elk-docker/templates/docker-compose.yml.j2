@@ -1,0 +1,97 @@
+version: '{{ docker_compose_version }}'
+
+services:
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:{{ elasticsearch_version }}
+    container_name: elasticsearch
+    environment:
+      - node.name={{ elasticsearch_node_name }}
+      - cluster.name={{ elasticsearch_cluster_name }}
+      - discovery.type=single-node
+      - bootstrap.memory_lock=true
+      - "ES_JAVA_OPTS=-Xms{{ elasticsearch_heap_size }} -Xmx{{ elasticsearch_heap_size }}"
+      - xpack.security.enabled=false
+      - xpack.security.enrollment.enabled=false
+      - xpack.security.http.ssl.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - {{ elk_home }}/elasticsearch/data:/usr/share/elasticsearch/data
+    ports:
+      - "{{ elasticsearch_http_port }}:9200"
+      - "{{ elasticsearch_transport_port }}:9300"
+    networks:
+      - {{ elk_network_name }}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  logstash:
+    image: docker.elastic.co/logstash/logstash:{{ logstash_version }}
+    container_name: logstash
+    environment:
+      - "LS_JAVA_OPTS=-Xms{{ logstash_heap_size }} -Xmx{{ logstash_heap_size }}"
+      - xpack.monitoring.enabled=false
+    volumes:
+      - {{ elk_home }}/logstash/pipeline:/usr/share/logstash/pipeline
+      - {{ elk_home }}/logstash/data:/usr/share/logstash/data
+      - /var/log/remote:/var/log/remote:ro
+    ports:
+      - "{{ logstash_port }}:5044"
+    networks:
+      - {{ elk_network_name }}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9600 || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:{{ kibana_version }}
+    container_name: kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT={{ kibana_port }}
+      - xpack.security.enabled=false
+      - xpack.encryptedSavedObjects.encryptionKey={{ lookup('password', '/dev/null length=32 chars=ascii_letters,digits') }}
+    volumes:
+      - {{ elk_home }}/kibana/data:/usr/share/kibana/data
+    ports:
+      - "{{ kibana_port }}:5601"
+    networks:
+      - {{ elk_network_name }}
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:5601/api/status || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+networks:
+  {{ elk_network_name }}:
+    driver: bridge
+
+volumes:
+  elasticsearch-data:
+    driver: local
+  logstash-data:
+    driver: local
+  kibana-data:
+    driver: local

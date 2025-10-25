@@ -1,0 +1,33 @@
+# Rsyslog TLS Server Configuration
+
+# Load modules
+module(load="imtcp"
+       StreamDriver.Name="gtls"
+       StreamDriver.Mode="1"
+       StreamDriver.Authmode="anon")
+
+# Set TLS driver
+global(
+    DefaultNetstreamDriver="gtls"
+    DefaultNetstreamDriverCAFile="{{ rsyslog_ca_cert }}"
+    DefaultNetstreamDriverCertFile="{{ rsyslog_server_cert }}"
+    DefaultNetstreamDriverKeyFile="{{ rsyslog_server_key }}"
+)
+
+# Listen on TLS port
+input(type="imtcp"
+      port="{{ rsyslog_server_port }}"
+      name="tcp-tls-input")
+
+# Remote log template with proper permissions
+template(name="RemoteHost" type="string" string="{{ rsyslog_remote_log_dir }}/%HOSTNAME%/%PROGRAMNAME%.log")
+
+# Set directory permissions for dynamic file creation
+$DirCreateMode 0755
+$FileCreateMode 0644
+
+# Log messages from remote hosts
+if $fromhost-ip != '127.0.0.1' then {
+    action(type="omfile" dynaFile="RemoteHost")
+    stop
+}

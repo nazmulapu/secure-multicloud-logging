@@ -1,0 +1,79 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+*.tfvars
+!*.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Ansible
+*.retry
+ansible/inventory/hosts.yml
+!ansible/inventory/hosts.yml.example
+*.backup
+*.bak
+
+# SSH Keys
+*.pem
+*.key
+!ca-cert.pem
+id_rsa
+id_rsa.pub
+*.ppk
+
+# TLS/SSL Certificates (except CA cert for distribution)
+*.crt
+*.csr
+server-*.pem
+client-*.pem
+
+# Credentials and Secrets
+*.credentials
+secrets.yml
+vault-pass.txt
+
+# AWS
+.aws/
+*.csv
+
+# Azure
+.azure/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+env/
+
+# Misc
+.env
+.env.local
+temp/
+tmp/

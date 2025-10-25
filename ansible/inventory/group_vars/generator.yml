@@ -1,0 +1,17 @@
+---
+# Generator-specific variables
+
+# Rsyslog Client Configuration
+rsyslog_server_ip: "63.180.189.221"
+rsyslog_server_port: 6514
+rsyslog_tls_cert_dir: "/etc/rsyslog.d/tls"
+rsyslog_ca_cert: "{{ rsyslog_tls_cert_dir }}/ca-cert.pem"
+
+# Log Generation Configuration
+log_generation_enabled: true
+log_generation_interval: 60  # seconds
+log_types:
+  - apache_access
+  - auth
+  - application
+log_output_dir: "/var/log/generated"

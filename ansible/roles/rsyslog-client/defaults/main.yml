@@ -1,0 +1,6 @@
+---
+rsyslog_server_ip: ""
+rsyslog_server_port: 6514
+rsyslog_tls_cert_dir: "/etc/rsyslog.d/tls"
+rsyslog_ca_cert: "{{ rsyslog_tls_cert_dir }}/ca-cert.pem"
+local_ca_cert_path: ""  # Path to CA cert on Ansible controller

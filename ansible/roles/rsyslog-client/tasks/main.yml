@@ -1,0 +1,45 @@
+---
+- name: Install rsyslog and rsyslog-gnutls
+  apt:
+    name:
+      - rsyslog
+      - rsyslog-gnutls
+    state: present
+    update_cache: yes
+
+- name: Create TLS certificate directory
+  file:
+    path: "{{ rsyslog_tls_cert_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Copy CA certificate
+  copy:
+    src: "{{ local_ca_cert_path }}"
+    dest: "{{ rsyslog_ca_cert }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart rsyslog
+  when: local_ca_cert_path is defined
+
+- name: Configure rsyslog TLS client
+  template:
+    src: rsyslog-client.conf.j2
+    dest: /etc/rsyslog.d/10-tls-client.conf
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart rsyslog
+
+- name: Enable and start rsyslog
+  systemd:
+    name: rsyslog
+    enabled: yes
+    state: started
+
+- name: Display rsyslog client status
+  debug:
+    msg: "Rsyslog TLS client configured to forward logs to {{ rsyslog_server_ip }}:{{ rsyslog_server_port }}"

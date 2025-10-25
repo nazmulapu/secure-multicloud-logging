@@ -1,0 +1,7 @@
+---
+rsyslog_server_port: 6514
+rsyslog_remote_log_dir: "/var/log/remote"
+rsyslog_tls_cert_dir: "/etc/rsyslog.d/tls"
+rsyslog_ca_cert: "{{ rsyslog_tls_cert_dir }}/ca-cert.pem"
+rsyslog_server_cert: "{{ rsyslog_tls_cert_dir }}/server-cert.pem"
+rsyslog_server_key: "{{ rsyslog_tls_cert_dir }}/server-key.pem"

@@ -1,0 +1,9 @@
+[Unit]
+Description=Log Generator Service
+After=network.target rsyslog.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/generate-logs.sh
+StandardOutput=journal
+StandardError=journal

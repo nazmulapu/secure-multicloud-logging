@@ -1,0 +1,20 @@
+all:
+  children:
+    collector:
+      hosts:
+        aws_collector:
+          ansible_host: YOUR_AWS_ELASTIC_IP  # Replace with AWS Elastic IP
+          ansible_user: ubuntu
+          ansible_ssh_private_key_file: ~/.ssh/your-aws-key.pem  # Replace with your AWS SSH key path
+          ansible_python_interpreter: /usr/bin/python3
+          
+    generator:
+      hosts:
+        azure_generator:
+          ansible_host: YOUR_AZURE_PUBLIC_IP  # Replace with Azure Public IP
+          ansible_user: azureuser
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa  # Replace with your SSH key path
+          ansible_python_interpreter: /usr/bin/python3
+
+  vars:
+    ansible_ssh_common_args: '-o StrictHostKeyChecking=no'

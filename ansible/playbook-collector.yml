@@ -1,0 +1,32 @@
+---
+- name: Deploy ELK Stack and Rsyslog Server on AWS Collector
+  hosts: collector
+  become: yes
+
+  roles:
+    - common           # Base system setup (packages, Python modules)
+    - elk-docker       # Docker-based ELK stack
+    - rsyslog-server   # Rsyslog TLS server
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg: |
+          ========================================
+          AWS Collector Deployment Complete!
+          ========================================
+          Elasticsearch: http://{{ ansible_default_ipv4.address }}:9200
+          Kibana: http://{{ ansible_default_ipv4.address }}:5601
+          Rsyslog TLS: {{ ansible_default_ipv4.address }}:6514
+          
+          Docker Compose:
+          - Location: /opt/elk/docker-compose.yml
+          - Status: docker-compose -f /opt/elk/docker-compose.yml ps
+          - Logs: docker-compose -f /opt/elk/docker-compose.yml logs -f
+          - Restart: docker-compose -f /opt/elk/docker-compose.yml restart
+          
+          Next Steps:
+          1. Generate TLS certificates using setup-tls.sh
+          2. Configure Azure generator with rsyslog client
+          3. Start log generation
+          ========================================

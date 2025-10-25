@@ -1,0 +1,64 @@
+---
+- name: Deploy Rsyslog Client and Log Generator on Azure
+  hosts: generator
+  become: yes
+
+  pre_tasks:
+    - name: Create log generation directory
+      file:
+        path: "{{ log_output_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+  roles:
+    - common          # Base system setup (packages, Python modules)
+    - rsyslog-client  # Rsyslog TLS client
+
+  tasks:
+    - name: Copy log generation script
+      copy:
+        src: ../scripts/generate-logs.sh
+        dest: /usr/local/bin/generate-logs.sh
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Create systemd service for log generation
+      template:
+        src: log-generator.service.j2
+        dest: /etc/systemd/system/log-generator.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create systemd timer for log generation
+      template:
+        src: log-generator.timer.j2
+        dest: /etc/systemd/system/log-generator.timer
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Enable and start log generator timer
+      systemd:
+        name: log-generator.timer
+        enabled: yes
+        state: started
+        daemon_reload: yes
+
+  post_tasks:
+    - name: Display deployment summary
+      debug:
+        msg: |
+          ========================================
+          Azure Generator Deployment Complete!
+          ========================================
+          Rsyslog forwarding to: {{ rsyslog_server_ip }}:{{ rsyslog_server_port }}
+          Log generation: Active (every {{ log_generation_interval }} seconds)
+          Log output: {{ log_output_dir }}
+          
+          Verify logs are being forwarded:
+          tail -f /var/log/syslog
+          ========================================
