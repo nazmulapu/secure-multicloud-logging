@@ -31,6 +31,63 @@ filter {
         target => "@timestamp"
       }
     }
+    
+    # Parse application logs with structured [LEVEL] format
+    if [syslog_program] == "application" {
+      grok {
+        match => { "syslog_message" => "\[%{LOGLEVEL:log_level}\] %{GREEDYDATA:app_message}" }
+        tag_on_failure => []
+      }
+      
+      # Map log levels to severity (for easier filtering)
+      if [log_level] == "ERROR" {
+        mutate { add_field => { "severity" => "error" } }
+      } else if [log_level] == "WARN" {
+        mutate { add_field => { "severity" => "warning" } }
+      } else if [log_level] == "INFO" {
+        mutate { add_field => { "severity" => "info" } }
+      } else if [log_level] == "DEBUG" {
+        mutate { add_field => { "severity" => "debug" } }
+      }
+    }
+    
+    # Parse Apache access logs
+    if [syslog_program] == "apache" {
+      grok {
+        match => { "syslog_message" => "%{COMBINEDAPACHELOG}" }
+        tag_on_failure => []
+      }
+      
+      # Map HTTP status to severity
+      if [response] {
+        if [response] =~ /^[45]\d\d/ {
+          mutate { add_field => { "severity" => "error" } }
+        } else if [response] =~ /^[23]\d\d/ {
+          mutate { add_field => { "severity" => "info" } }
+        }
+      }
+    }
+    
+    # Parse auth logs (SSH)
+    if [syslog_program] == "sshd" {
+      if [syslog_message] =~ /Failed password/ {
+        mutate { add_field => { "severity" => "warning" } }
+        mutate { add_field => { "auth_status" => "failed" } }
+      } else if [syslog_message] =~ /Accepted/ {
+        mutate { add_field => { "severity" => "info" } }
+        mutate { add_field => { "auth_status" => "success" } }
+      }
+    }
+    
+    # Mark security events with high severity
+    if [syslog_program] == "security" {
+      mutate { add_field => { "severity" => "warning" } }
+    }
+    
+    # Default severity if not set
+    if ![severity] {
+      mutate { add_field => { "severity" => "info" } }
+    }
   }
 }
 
